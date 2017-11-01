@@ -1,405 +1,348 @@
 /*
  * LBS showIMG
- * Date: 2011-06-24
+ * Date: 2012-03-10
  */
-(function() {
-	var DOM = {
-		getStyle: function(el, attr) {
-			return el.currentStyle ? el.currentStyle[attr] : getComputedStyle(el, null)[attr];
-		},
-		setStyle: function(el, name, value) {
-			el.style[name] = value + 'px';
-		},
-		setOpacity: function(e, v) {
-			e.style.filter = 'alpha(opacity=' + v + ')';
-			e.style.opacity = v / 100;
+(function(global, factory) {
+	typeof exports === 'object' && typeof module !== 'undefined' ? module.exports = factory() :
+		typeof define === 'function' && (define.amd || define.cmd) ? define(factory) :
+		(global.showIMG = factory());
+}(this, (function() {
+	'use strict';
+
+	var utils = (function() {
+
+		function getOpacity(el) {
+			var hasOpacity = (el.style.opacity != null),
+				reAlpha = /alpha\(opacity=([\d.]+)\)/i,
+				filter, opacity;
+			if (hasOpacity) {
+				opacity = el.style.opacity || getComputedStyle(el, null).opacity;
+				return (opacity == '') ? 100 : opacity * 100;
+			} else {
+				filter = el.style.filter || el.currentStyle.filter;
+				if (filter) opacity = filter.match(reAlpha);
+				return (opacity == null || filter == null) ? 100 : (opacity[1]);
+			}
 		}
-	};
-	window.FX = function(el, json, opt) {
-		var _opt = {
-			duration: 400,
-			fps: 40,
-			tween: FX.tween.linear,
-			callback: function() {}
-		};
-		for (var key in opt) {
-			_opt[key] = opt[key];
+
+		function setOpacity(el, v) {
+			el.style.opacity != null ? el.style.opacity = v / 100 : el.style.filter = 'alpha(opacity=' + v + ')';
 		}
-		var isOK = jsonlen = 0;
-		for (var j in json) jsonlen++;
-		for (attr in json) {
-			(function(attr) {
-				var start = (attr == 'opacity') ? parseInt(100 * DOM.getStyle(el, 'opacity')) : parseInt(DOM.getStyle(el, attr));
-				var end = json[attr],
+
+		function getStyle(el, n) {
+			if (n.toLowerCase() === 'opacity') return getOpacity(el);
+			return el.currentStyle ? el.currentStyle[n] : getComputedStyle(el, null)[n];
+		}
+
+		function setStyle(el, n, v) {
+			switch (n) {
+				case 'left':
+				case 'right':
+				case 'top':
+				case 'bottom':
+					v = parseFloat(v) + 'px';
+					break;
+				case 'width':
+				case 'height':
+					v = parseFloat(v) < 0 ? 0 : parseFloat(v) + 'px';
+					break;
+			}
+			n.toLowerCase() === 'opacity' ? setOpacity(el, v) : el.style[n] = v;
+		}
+
+		function animate(el, props, opts) {
+			el = typeof el === 'string' ? document.getElementById(el) : el;
+			if (!el) return;
+			var opts = opts || {};
+			var duration = opts.duration || 400;
+			var fps = opts.fps || 60;
+			var easing = opts.easing || function(k) {
+				return k;
+			};
+			var callback = opts.callback || function() {};
+			var args = arguments;
+			var p, prop, count = 0,
+				amount = 0;
+			var setProp = function(prop) {
+				var start = parseInt(getStyle(el, prop)),
+					end = parseInt(props[prop]),
 					change = end - start,
-					startTime = new Date().getTime(),
-					duration = _opt.duration,
-					ease = _opt.tween;
-				(function() {
-					var newTime = new Date().getTime(),
+					startTime = new Date() - 0;
+				if (start == end) {
+					return stop();
+				}
+
+				function play() {
+					var newTime = new Date() - 0,
 						timestamp = newTime - startTime,
-						delta = ease(timestamp / duration);
-					(attr == 'opacity') ? DOM.setOpacity(el, start + delta * change): DOM.setStyle(el, attr, start + delta * change);
-					if (duration <= timestamp) {
-						(attr == 'opacity') ? DOM.setOpacity(el, end): DOM.setStyle(el, attr, end);
-						if (++isOK == jsonlen) _opt.callback && _opt.callback();
+						delta = easing(timestamp / duration);
+					setStyle(el, prop, parseInt(start + delta * change));
+					if (timestamp > duration) {
+						stop();
 					} else {
-						setTimeout(arguments.callee, 1000 / _opt.fps);
+						setTimeout(play, 1000 / fps);
 					}
-				})();
-			})(attr);
-		}
-	};
-	FX.tween = {
-		linear: function(pos) {
-			return pos;
-		},
-		swing: function(pos) {
-			return 0.5 - Math.cos(pos * Math.PI) / 2;
-		}
-	};
-})();
-(function() {
-	var LBS = {
-		$: function(id) {
-			return typeof id == "string" ? document.getElementById(id) : id;
-		},
-		$tag: function(tag, elem) {
-			return (elem || document).getElementsByTagName(tag);
-		},
-		getStyle: function(el, attr) {
-			return el.currentStyle ? el.currentStyle[attr] : getComputedStyle(el, null)[attr];
-		},
-		setStyle: function(el, styles) {
-			for (name in styles) {
-				el.style[name] = styles[name];
-			}
-		},
-		setOpacity: function(e, v) {
-			e.style.filter = 'alpha(opacity=' + v + ')';
-			e.style.opacity = v / 100;
-		},
-		create: function(elem) {
-			return document.createElement(elem);
-		},
-		hide: function(elem) {
-			elem.style.display = 'none';
-		},
-		show: function(elem) {
-			elem.style.display = 'block';
-		},
-		on: function(el, type, handler) {
-			if (el.addEventListener)
-				el.addEventListener(type, handler, false);
-			else
-				el.attachEvent('on' + type, function() {
-					return handler.call(el, event)
-				});
-		},
-		getScrollInPage: function() {
-			var d = document,
-				x = d.documentElement.scrollLeft || d.body.scrollLeft,
-				y = d.documentElement.scrollTop || d.body.scrollTop;
-			return {
-				x: x,
-				y: y
-			};
-		},
-		getWindowSize: function() {
-			var d = document;
-			w = d.documentElement.clientWidth || d.body.clientWidth,
-				h = d.documentElement.clientHeight || d.body.clientHeight;
-			return {
-				w: w,
-				h: h
-			};
-		},
-		getPageSize: function() {
-			var d = document,
-				w = d.documentElement.scrollWidth || d.body.scrollWidth,
-				h = d.documentElement.scrollHeight || d.body.scrollHeight;
-			return {
-				w: w,
-				h: h
-			};
-		}
-	};
-	var imgReady = function(url, callback, error) {
-		var width, height, intervalId, check, div,
-			img = new Image(),
-			body = document.body;
-		img.src = url;
-		if (img.complete) {
-			return callback(img.width, img.height);
-		};
-		if (body) {
-			div = document.createElement('div');
-			div.style.cssText = 'visibility:hidden;position:absolute;left:0;top:0;width:1px;height:1px;overflow:hidden';
-			div.appendChild(img)
-			body.appendChild(div);
-			width = img.offsetWidth;
-			height = img.offsetHeight;
-			check = function() {
-				if (img.offsetWidth !== width || img.offsetHeight !== height) {
-					clearInterval(intervalId);
-					callback(img.offsetWidth, img.clientHeight);
-					img.onload = null;
-					div.innerHTML = '';
-					div.parentNode.removeChild(div);
-				};
-			};
-			intervalId = setInterval(check, 150);
-		};
-		img.onload = function() {
-			callback(img.width, img.height);
-			img.onload = img.onerror = null;
-			clearInterval(intervalId);
-			body && img.parentNode.removeChild(img);
-		};
-		img.onerror = function() {
-			error && error();
-			clearInterval(intervalId);
-			body && img.parentNode.removeChild(img);
-		};
-	};
-	window.showIMG = function(opt) {
-		if (typeof(arguments[0]) == 'undefined') return false;
-		var _opt = {
-			where: document.body,
-			mouse: false,
-			keyboard: false,
-			title: false,
-			callback: function() {}
-		};
-		for (var key in opt) {
-			_opt[key] = opt[key];
-		}
-		this.Box = LBS.$(_opt.where);
-		this.mouse = _opt.mouse;
-		this.keyboard = _opt.keyboard;
-		this.title = _opt.title;
-		this.fn = _opt.callback;
-		this.images = LBS.$tag('img', this.Box) || [];
-		if (this.images.length == 0) return false;
-		this.num = this.images.length;
-		this.index = 0;
+				}
 
-		this.srcArr = [];
-		this.titleArr = [];
-		this.imgSrc = 'images/blank.gif';
+				function stop() {
+					setStyle(el, prop, end);
+					if (++count === amount) {
+						callback && callback();
+					}
+				}
+
+				play();
+			};
+			if (args.length === 3) {
+				if (typeof args[2] === 'number') duration = args[2];
+				if (typeof args[2] === 'function') callback = args[2];
+			} else if (args.length === 4) {
+				if (typeof args[2] === 'number') duration = args[2];
+				if (typeof args[3] === 'function') callback = args[3];
+			}
+			for (p in props) amount++;
+			for (prop in props) {
+				setProp(prop);
+			}
+		}
+
+		function on(el, type, handler) {
+			if (el.addEventListener) {
+				return el.addEventListener(type, handler, false);
+			} else if (el.attachEvent) {
+				return el.attachEvent('on' + type, handler);
+			} else {
+				return el['on' + type] = handler;
+			}
+		}
+
+		function off(el, type, handler) {
+			if (el.removeEventListener) {
+				return el.removeEventListener(type, handler, false);
+			} else if (el.detachEvent) {
+				return el.detachEvent('on' + type, handler);
+			} else {
+				return el['on' + type] = null;
+			}
+		}
+
+		function create(tagName) {
+			return document.createElement(tagName);
+		}
+
+		function setStyles(el, styles) {
+			for (var key in styles) {
+				setStyle(el, key, styles[key]);
+			}
+		}
+
+		function getClass(cls, target) {
+			if (document.getElementsByClassName) return (target || document).getElementsByClassName(cls);
+			var arr = [],
+				re = new RegExp('(^| )' + cls + '( |$)'),
+				els = (target || document).getElementsByTagName('*'),
+				i = 0,
+				l = els.length;
+			for (; i < l; i++) {
+				if (re.test(els[i].className)) arr.push(els[i]);
+			}
+			return arr;
+		}
+
+		return {
+			on: on,
+			off: off,
+			create: create,
+			css: setStyles,
+			getClass: getClass,
+			animate: animate
+		};
+	}());
+
+	var showIMG = function(opts) {
+		opts = opts || {};
 		this.doc = document.documentElement;
-		this.docBody = LBS.$tag('body')[0];
-		this.Width = this.Height = 300;
-		this.pageH = LBS.getPageSize().h;
-		this.windowW = LBS.getWindowSize().w;
-		this.windowH = LBS.getWindowSize().h;
-		this.scrollY = LBS.getScrollInPage().y;
-		this.time = new Date() - 0;
-		this.showOK = true;
+		this.body = document.body;
+		this.wrapper = (typeof opts.el === 'string' ? document.getElementById(opts.el) : opts.el) || this.body;
+		this.images = utils.getClass(opts.boxClass || 'boxClass', this.wrapper);
+		if (this.images.length < 1) {
+			this.images = this.wrapper.getElementsByTagName('img');
+		}
+		this.length = this.images.length;
+		if (this.length < 1) return;
 
-		this.init();
+		this.showTitle = opts.showTitle || false;
+		this.useMouse = opts.useMouse || false;
+		this.useKeyboard = opts.useKeyboard || false;
+		this.before = opts.before || function() {};
+		this.after = opts.after || function() {};
 
-	}
+		this.index = 0;
+		this.imgSrc = [];
+		this.imgTitle = [];
+
+		this._init();
+	};
 	showIMG.prototype = {
-		init: function() {
-			this.setImage();
-			this.click();
+		_init: function() {
+			this._initEvent();
 		},
-		setImage: function() {
-			for (var i = 0; i < this.num; i++) {
-				var img = this.images[i];
-				this.srcArr.push(img.src);
-				img.lbsIndex = i + 1;
-				this.title && (img.title ? this.titleArr.push(img.title) : this.titleArr.push(''));
-			}
-		},
-		click: function() {
+		_initEvent: function() {
 			var _this = this;
-			LBS.on(this.Box, 'click', function(e) {
-				e = e || window.event;
-				target = e.target || e.srcElement;
-				if (target.tagName.toUpperCase() === 'IMG' && target.lbsIndex) {
-					_this.index = target.lbsIndex - 1;
-					_this.show();
-					_this.playImg();
-					_this.bind();
-					e.preventDefault ? e.preventDefault() : e.returnValue = false;
-					e.stopPropagation ? e.stopPropagation() : e.cancelBubble = true;
-					return false;
+			this._getSize();
+			this._getImage();
+			utils.on(this.wrapper, 'click', function(e) {
+				var e = e || window.event;
+				var target = e.target || e.srcElement;
+				e.preventDefault ? e.preventDefault() : e.returnValue = false;
+				e.stopPropagation ? e.stopPropagation() : e.cancelBubble = true;
+				if (target.tagName.toUpperCase() === 'IMG' && target.getAttribute('data-box-index')) {
+					_this.index = target.getAttribute('data-box-index') - 1;
+					_this._show();
 				}
 			});
 		},
-		playImg: function() {
+		_getImage: function() {
+			for (var i = 0, img = null; i < this.length; i++) {
+				img = this.images[i];
+				this.imgSrc.push(img.src);
+				img.setAttribute('data-box-index', i + 1);
+				this.showTitle && (img.title ? this.imgTitle.push(img.title) : this.imgTitle.push(''));
+			}
+		},
+		_getSize: function() {
+			this.windowW = this.doc.clientWidth || this.body.clientWidth;
+			this.windowH = this.doc.clientHeight || this.body.clientHeight;
+			if (document.compatMode != 'CSS1Compat') {
+				this.windowW = this.body.clientWidth;
+				this.windowH = this.body.clientHeight;
+			}
+		},
+		_bindEvent: function() {
 			var _this = this;
-			this.showOK = false;
-			this.time = new Date() - 0;
-			this.index == this.num - 1 ? LBS.hide(this.nextBtn) : LBS.show(this.nextBtn);
-			this.index == 0 ? LBS.hide(this.prevBtn) : LBS.show(this.prevBtn);
-			this.title && (this.titleLayer.innerHTML = '<b>' + (this.index + 1) + '/' + this.num + '</b>' + this.titleArr[this.index]);
-			this.fn && this.fn(this.index);
-			this.loadImg(this.srcArr[this.index], function(width, height) {
-				_this.setPosition(width, height);
+			utils.on(this.maskLayer, 'click', function() {
+				_this._hide();
 			});
+			utils.on(this.closeLayer, 'click', function() {
+				_this._hide();
+			});
+			utils.on(this.prevLayer, 'click', function() {
+				_this._prevImg();
+			});
+			utils.on(this.nextLayer, 'click', function() {
+				_this._nextImg();
+			});
+			utils.on(window, 'resize', function() {
+				_this._resize();
+			});
+			this.useMouse && this._mouseImg();
+			this.useKeyboard && this._keyboardImg();
 		},
-		nextImg: function() {
-			this.index++;
-			this.playImg();
-		},
-		prevImg: function() {
-			this.index--;
-			this.playImg();
-		},
-		create: function() {
-			this.maskLayer = LBS.create('div'); //遮罩层
+		_initCreate: function() {
+			this.maskLayer = utils.create('div');
 			this.maskLayer.className = 'lbsbox_maskLayer';
-			LBS.setStyle(this.maskLayer, {
-				height: Math.max(this.pageH, this.windowH) + 'px'
-			});
-			this.docBody.appendChild(this.maskLayer);
-
-			this.showLayer = LBS.create('div'); //显示图片容器层
+			this.showLayer = utils.create('div');
 			this.showLayer.className = 'lbsbox_showLayer';
-			LBS.setStyle(this.showLayer, {
-				left: (this.windowW - 300) / 2 + 'px',
-				top: this.scrollY + (this.windowH - 300) / 2 + 'px'
+
+			this.imgLayer = utils.create('img');
+			this.prevLayer = utils.create('div');
+			this.prevLayer.className = 'lbsbox_prev';
+			this.nextLayer = utils.create('div');
+			this.nextLayer.className = 'lbsbox_next';
+			this.closeLayer = utils.create('div');
+			this.closeLayer.className = 'lbsbox_close';
+
+			utils.css(this.showLayer, {
+				opacity: 0,
+				width: 300,
+				height: 300,
+				left: (this.windowW - 300) / 2,
+				top: (this.windowH - 300) / 2
 			});
-			this.docBody.appendChild(this.showLayer);
 
-			this.showImg = LBS.create('img'); //显示的图片
-			this.showImg.src = this.imgSrc;
-			this.showLayer.appendChild(this.showImg);
+			utils.css(this.maskLayer, {
+				opacity: 0,
+				height: this.windowH
+			});
 
-			this.nextBtn = LBS.create('a'); //下
-			this.nextBtn.href = 'javascript:;';
-			this.nextBtn.className = 'lbsbox_next';
-			this.showLayer.appendChild(this.nextBtn);
-
-			this.prevBtn = LBS.create('a'); //上 
-			this.prevBtn.href = 'javascript:;';
-			this.prevBtn.className = 'lbsbox_prev';
-			this.showLayer.appendChild(this.prevBtn);
-
-			this.closeBtn = LBS.create('a'); //关闭
-			this.closeBtn.href = 'javascript:;';
-			this.closeBtn.innerHTML = 'X';
-			this.closeBtn.className = 'lbsbox_close';
-			this.showLayer.appendChild(this.closeBtn);
-
-			this.title && this.createTitle();
-
+			this.showLayer.appendChild(this.imgLayer);
+			this.showLayer.appendChild(this.prevLayer);
+			this.showLayer.appendChild(this.nextLayer);
+			this.showLayer.appendChild(this.closeLayer);
+			if (this.showTitle) this._createTitle();
 		},
-		createTitle: function() {
-			this.titleLayer = LBS.create('div');
+		_createTitle: function() {
+			this.titleLayer = utils.create('div');
 			this.titleLayer.className = 'lbsbox_titleLayer';
 			this.showLayer.appendChild(this.titleLayer);
 		},
-		loadImg: function(src, fn) {
-			this.showImg.src = src;
-			LBS.setOpacity(this.showImg, 0);
-			this.title && LBS.setOpacity(this.titleLayer, 0);
-			this.title && LBS.setStyle(this.titleLayer, {
-				'bottom': '15px',
-				'height': 0
-			});
-			imgReady(src, function(width, height) {
-				fn && fn(width, height);
-			});
-		},
-		show: function() {
-			if (!this.maskLayer) {
-				this.create();
-				LBS.setOpacity(this.maskLayer, 0);
-				LBS.setOpacity(this.showLayer, 0);
+		_show: function() {
+			if (!this.showLayer) {
+				this._initCreate();
+				this._bindEvent();
 			}
-			LBS.show(this.maskLayer);
-			LBS.show(this.showLayer);
-			LBS.setStyle(this.doc, {
+			this.status = 'show';
+			this.body.appendChild(this.maskLayer);
+			this.body.appendChild(this.showLayer);
+			utils.css(this.doc, {
 				overflow: 'hidden'
 			});
-			LBS.setStyle(this.docBody, {
+			utils.css(this.body, {
 				overflow: 'hidden'
 			});
-			FX(this.maskLayer, {
-				'opacity': 75
-			}, {
-				duration: 300
-			});
-			FX(this.showLayer, {
-				'opacity': 100
-			}, {
-				'duration': 300
-			});
-			this.ok = true;
+			utils.animate(this.maskLayer, {
+				opacity: 75
+			}, 300);
+			utils.animate(this.showLayer, {
+				opacity: 100
+			}, 300);
+			this._playImg();
 		},
-		hide: function() {
+		_hide: function() {
 			var _this = this;
-			LBS.setStyle(this.doc, {
-				overflow: 'auto'
+			this.status = 'hide';
+			utils.css(this.doc, {
+				overflow: ''
 			});
-			LBS.setStyle(this.docBody, {
-				overflow: 'auto'
+			utils.css(this.body, {
+				overflow: ''
 			});
-			FX(this.maskLayer, {
-				'opacity': 0
-			}, {
-				duration: 300,
-				callback: function() {
-					LBS.hide(_this.maskLayer)
-				}
+			utils.animate(this.maskLayer, {
+				opacity: 0
+			}, 300, function() {
+				_this.body.removeChild(_this.maskLayer);
 			});
-			FX(this.showLayer, {
-				'opacity': 0
-			}, {
-				duration: 300,
-				callback: function() {
-					LBS.hide(_this.showLayer)
-				}
+			utils.animate(this.showLayer, {
+				opacity: 0
+			}, 300, function() {
+				_this.body.removeChild(_this.showLayer);
 			});
-			this.ok = false;
 		},
-		bind: function() {
+		_playImg: function() {
 			var _this = this;
-			LBS.on(this.maskLayer, 'click', function() {
-				_this.hide();
+			this.showTitle && (this.titleLayer.innerHTML = '<b>' + (this.index + 1) + '/' + this.length + '</b>' + this.imgTitle[this.index]);
+			this.before && this.before(this.index);
+			this._src = this.imgSrc[this.index];
+			this._loadImg(this._src, function(width, height) {
+				_this.status = 'play';
+				_this._animateImg(width, height);
 			});
-			LBS.on(this.closeBtn, 'click', function() {
-				if (!_this.ok) return;
-				_this.hide();
-			});
-			LBS.on(this.prevBtn, 'click', function() {
-				if (!_this.ok) return;
-				_this.showOK && _this.prevImg();
-			});
-			LBS.on(this.nextBtn, 'click', function() {
-				if (!_this.ok) return;
-				_this.showOK && _this.nextImg();
-			});
-			LBS.on(window, 'resize', function() {
-				if (!_this.ok) return;
-				_this.pageH = LBS.getPageSize().h;
-				_this.windowW = LBS.getWindowSize().w;
-				_this.windowH = LBS.getWindowSize().h;
-				_this.scrollY = LBS.getScrollInPage().y;
-				LBS.setStyle(_this.maskLayer, {
-					height: Math.max(_this.pageH, _this.windowH) + 'px'
-				});
-				LBS.setStyle(_this.showLayer, {
-					left: (_this.windowW - _this.Width - 20) / 2 + 'px',
-					top: _this.scrollY + (_this.windowH - _this.Height - 10) / 2 + 'px'
-				});
-			});
-			this.mouse && this.mouseImg();
-			this.keyboard && this.keyboardImg();
 		},
-		setPosition: function(width, height) {
-			this.scrollY = LBS.getScrollInPage().y;
-			this.windowW = LBS.getWindowSize().w;
-			this.windowH = LBS.getWindowSize().h;
+		_loadImg: function(src, fn) {
+			var img = new Image();
+			img.onload = function() {
+				fn(img.width, img.height);
+				img.onload = null;
+			};
+			img.src = src;
+		},
+		_animateImg: function(width, height) {
 			var _this = this,
 				oW = this.windowW - 20,
 				oH = this.windowH - 20,
 				x = width / height,
-				y = height / width;
+				y = height / width,
+				left, top;
 			if (width > oW) {
 				width = oW - 10;
 				height = width * y - 10;
@@ -408,91 +351,101 @@
 				height = oH - 10;
 				width = height * x - 10;
 			}
-			this.Width = width;
-			this.Height = height;
-			var left = (this.windowW - width - 20) / 2,
-				top = this.scrollY + (this.windowH - height - 20) / 2;
+			this._width = width;
+			this._height = height;
+			left = (this.windowW - width - 20) / 2;
+			top = (this.windowH - height - 20) / 2;
 			left < 10 && (left = 10);
-			top < this.scrollY + 10 && (top = this.scrollY + 10);
-			LBS.setStyle(this.showImg, {
-				'width': width + 'px',
-				'height': height + 'px'
+			top < 10 && (top = 10);
+
+			this.showTitle && utils.css(this.titleLayer, {
+				height: 0,
+				opacity: 0
 			});
-			LBS.setStyle(this.prevBtn, {
-				'height': height + 'px'
+			utils.css(this.imgLayer, {
+				width: width,
+				height: height,
+				opacity: 0
 			});
-			LBS.setStyle(this.nextBtn, {
-				'height': height + 'px'
-			});
-			this.title && LBS.setStyle(this.titleLayer, {
-				'width': width + 'px'
-			});
-			FX(this.showLayer, {
-				'width': width,
-				'height': height,
-				'left': left,
-				'top': top
-			}, {
-				duration: 300,
-				tween: FX.tween.swing,
-				callback: function() {
-					FX(_this.showImg, {
-						'opacity': 100
-					}, {
-						duration: 300,
-						callback: function() {
-							_this.title && FX(_this.titleLayer, {
-								'bottom': 5,
-								'opacity': 100,
-								'height': 35
-							}, {
-								duration: 200
-							});
-							_this.showOK = true;
-						}
-					});
-				}
+			this.imgLayer.src = this._src;
+			utils.animate(this.showLayer, {
+				width: width,
+				height: height,
+				left: left,
+				top: top
+			}, 250, function() {
+				utils.animate(_this.imgLayer, {
+					opacity: 100
+				}, 250, function() {
+					_this.showTitle && utils.animate(_this.titleLayer, {
+						height: 35,
+						opacity: 100
+					}, 200);
+					_this.status = 'stop';
+					_this.after && _this.after(_this.index);
+				});
 			});
 		},
-		mouseImg: function() {
+		_nextImg: function() {
+			if (this.status === 'play') return;
+			this.index++;
+			this.index > this.length - 1 && (this.index = 0);
+			this._playImg();
+		},
+		_prevImg: function() {
+			if (this.status === 'play') return;
+			this.index--;
+			this.index < 0 && (this.index = this.length - 1);
+			this._playImg();
+		},
+		_resize: function() {
+			var _this = this;
+			clearTimeout(this.timer);
+			this.timer = setTimeout(function() {
+				_this._getSize();
+				utils.css(_this.maskLayer, {
+					height: _this.windowH
+				});
+				utils.css(_this.showLayer, {
+					left: (_this.windowW - _this._width - 20) / 2,
+					top: (_this.windowH - _this._height - 10) / 2
+				});
+			}, 60);
+		},
+		_mouseImg: function() {
 			var _this = this,
-				roll = function(e) {
-					if (!_this.ok) return;
+				wheel = function(e) {
+					if (_this.status === 'hide') return;
 					var x = 0,
 						e = e || window.event;
 					x = e.wheelDelta ? e.wheelDelta / 120 : -(e.detail || 0) / 3;
-					if (_this.showOK && +new Date() - _this.time > 800) {
-						x < 0 ? _this.index++ : _this.index--;
-						_this.index < 0 && (_this.index = _this.num - 1) || _this.index > _this.num - 1 && (_this.index = 0);
-						_this.playImg();
-					}
-					return false;
+					x < 0 ? _this._nextImg() : _this._prevImg();
 				};
-			window.netscape ? LBS.on(document, 'DOMMouseScroll', roll) : LBS.on(document, 'mousewheel', roll);
+			window.netscape ? utils.on(document, 'DOMMouseScroll', wheel) : utils.on(document, 'mousewheel', wheel);
 		},
-		keyboardImg: function() {
+		_keyboardImg: function() {
 			var _this = this;
-			LBS.on(document, 'keydown', function(e) {
-				if (!_this.ok) return;
+			utils.on(document, 'keydown', function(e) {
+				if (_this.status === 'hide') return;
 				e = e || window.event;
 				e.preventDefault ? e.preventDefault() : e.returnValue = false;
-				//e.stopPropagation ? e.stopPropagation() : e.cancelBubble = true;
-				if (_this.showOK && +new Date() - _this.time > 800) {
-					if (e.keyCode == 37 || e.keyCode == 38 || e.keyCode == 33) {
-						_this.index--;
-						_this.index < 0 && (_this.index = _this.num - 1);
-						_this.playImg();
-						return false;
-					}
-					if (e.keyCode == 39 || e.keyCode == 40 || e.keyCode == 34) {
-						_this.index++;
-						_this.index > _this.num - 1 && (_this.index = 0);
-						_this.playImg();
-						return false;
-					}
-				}
-				e.keyCode == 27 && _this.hide();
+				switch (e.keyCode) {
+					case 37:
+					case 38:
+					case 33:
+						_this._prevImg();
+						break;
+					case 39:
+					case 40:
+					case 34:
+						_this._nextImg();
+						break;
+					case 27:
+						_this._hide();
+						break;
+				};
 			});
 		}
-	}
-})();
+	};
+	return showIMG;
+})));
